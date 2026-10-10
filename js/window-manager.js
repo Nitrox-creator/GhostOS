@@ -5,6 +5,7 @@ export class WindowManager {
     if (existing) { existing.element.classList.remove('is-minimized'); this.focus(id); return existing; }
     const element = document.createElement('section');
     element.className = 'window-frame'; element.dataset.windowId = id;
+    if (options.restricted) element.classList.add('restricted-window');
     if (options.width) element.style.width = `${options.width}px`;
     if (options.height) element.style.height = `${options.height}px`;
     const offset = (this.windows.size % 7) * 24;
@@ -23,7 +24,7 @@ export class WindowManager {
     const statusLeft = document.createElement('span'); statusLeft.textContent = options.status || 'GHOSTOS // SIMULATION LOCALE';
     const statusRight = document.createElement('span'); statusRight.textContent = '100% LOCAL'; status.append(statusLeft, statusRight);
     element.append(bar, body, status); this.layer.append(element);
-    const task = document.createElement('button'); task.className = 'task-item'; task.textContent = title; task.title = title;
+    const task = document.createElement('button'); task.className = `task-item${options.restricted ? ' restricted-window' : ''}`; task.textContent = title; task.title = title;
     task.addEventListener('click', () => {
       if (element.classList.contains('is-minimized')) element.classList.remove('is-minimized');
       else if (element.classList.contains('active-window')) { this.minimize(id); return; }
@@ -67,7 +68,8 @@ export class WindowManager {
     const record = this.windows.get(id); if (!record) return;
     record.onClose?.(); record.element.remove(); record.task.remove(); this.windows.delete(id);
     this.onChange?.();
-    const remaining = [...this.windows.values()].filter(item => !item.element.classList.contains('is-minimized')).at(-1);
+    const restricted = document.body.dataset.mode === 'restricted';
+    const remaining = [...this.windows.values()].filter(item => !item.element.classList.contains('is-minimized') && item.element.classList.contains('restricted-window') === restricted).at(-1);
     if (remaining) this.focus(remaining.id);
   }
   closeAll() { for (const id of [...this.windows.keys()]) this.close(id); }

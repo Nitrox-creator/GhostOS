@@ -21,21 +21,22 @@
     </div>
   </div>
   <main class="desktop" id="desktop" aria-label="Bureau GhostOS">
-    <div class="desktop-topline"><span>GHOSTOS <b>2.7.04</b></span><span class="desktop-location">SECTEUR LOCAL // SESSION PRIVÉE</span></div>
+    <div class="desktop-topline"><span id="desktop-title">GHOSTOS <b>2.7.04</b></span><span class="desktop-location" id="desktop-location">SECTEUR LOCAL // SESSION PRIVÉE</span><button class="return-desktop" id="return-desktop" type="button" hidden>RETOUR AU BUREAU NORMAL</button></div>
     <div class="desktop-icons" id="desktop-icons" aria-label="Applications"></div>
+    <div class="desktop-icons restricted-icons" id="restricted-icons" aria-label="Applications restreintes" hidden></div>
     <section class="window-layer" id="window-layer" aria-live="polite"></section>
     <div class="notification-stack" id="notifications" aria-live="polite"></div>
     <footer class="taskbar">
-      <button class="start-button" id="start-button" aria-label="Ouvrir le menu principal" aria-expanded="false"><span class="start-glyph">G</span><span>GHOST</span></button>
+      <button class="start-button" id="start-button" aria-label="Ouvrir le menu principal" aria-expanded="false"><span class="start-glyph" id="start-glyph">G</span><span id="start-label">GHOST</span></button>
       <div class="task-list" id="task-list" aria-label="Fenêtres ouvertes"></div>
       <div class="tray">
         <button class="tray-status" id="system-status" title="État du système"><i></i><span>EN LIGNE</span></button>
         <time id="clock" aria-label="Heure"></time>
       </div>
       <div class="start-menu" id="start-menu" hidden>
-        <div class="menu-heading"><span>GHOSTOS</span><small>SESSION INVITÉ</small></div>
+        <div class="menu-heading"><span id="menu-title">GHOSTOS</span><small id="menu-subtitle">SESSION INVITÉ</small></div>
         <div class="menu-apps" id="menu-apps"></div>
-        <div class="menu-footer"><span>SIMULATION LOCALE</span><button id="menu-settings">PARAMÈTRES</button></div>
+        <div class="menu-footer"><span id="menu-footer-label">SIMULATION LOCALE</span><button id="menu-restricted" hidden>BUREAU INTERDIT</button><button id="menu-settings">PARAMÈTRES</button></div>
       </div>
     </footer>
   </main>

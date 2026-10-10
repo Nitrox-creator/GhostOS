@@ -1,14 +1,18 @@
 const STORAGE_KEY = 'ghostos.files.v1';
-const DIRECTORIES = ['/', '/home', '/home/ghost', '/home/ghost/documents', '/system', '/system/logs', '/system/archive', '/tmp'];
+const DIRECTORIES = ['/', '/home', '/home/ghost', '/home/ghost/documents', '/system', '/system/logs', '/system/archive', '/tmp', '/RESTRICTED', '/RESTRICTED/ARCHIVES'];
 const DEFAULT_FILES = {
   '/home/ghost/readme.txt': 'BIENVENUE, GHOST.\n\nCette machine a été mise hors ligne le 14 octobre 1997.\nLe journal de bord est dans /system/logs.\n\nSi le terminal répond encore, demande-lui ce qu’il se rappelle.',
-  '/home/ghost/documents/fragment.txt': 'FRAGMENT 01\n\nUn signal répété trois fois n’est pas un appel.\nC’est une clé.\n\nIndice : le nom du premier protocole était dans le bruit.',
+  '/home/ghost/documents/fragment.txt': 'FRAGMENT 01\n\nUn signal répété trois fois n’est pas un appel.\nC’est une clé.\n\nIndice : le nom du premier protocole était dans le bruit. Les étiquettes de restauration changent d’un jour, puis l’index efface leur préfixe.',
   '/home/ghost/documents/notes.txt': 'NOTE PERSONNELLE\n\nNe fais pas confiance à l’horloge après minuit.\nLe système prétend qu’il n’a jamais été connecté.',
-  '/system/logs/boot.log': '09:00:01  INIT  Démarrage du noyau GHOST/2.7\n09:00:03  WARN  Source temporelle absente\n09:00:04  INFO  Session invitée créée\n09:00:08  INFO  Utilisateur précédent : ECHO',
-  '/system/logs/incident.log': 'JOURNAL D’INCIDENT // 14.10.1997\n\nLe canal d’archive a été fermé manuellement.\nECHO a laissé une empreinte dans la mémoire non volatile.\nMotif de fermeture : NON RENSEIGNÉ.',
-  '/system/archive/readme.txt': 'ARCHIVE SCELLÉE\n\nTrois fragments doivent être réunis avant ouverture.\nCertaines réponses se trouvent dans les journaux.\nCertaines sont plus proches que tu ne crois.',
+  '/system/logs/boot.log': '09:00:01  INIT  Démarrage du noyau GHOST/2.7\n09:00:03  WARN  Source temporelle absente\n09:00:04  INFO  Session invitée créée\n09:00:08  INFO  Utilisateur précédent : ECHO\n09:00:09  TRACE Étiquette de restauration : décaler la date d’un jour, puis supprimer les deux premières lettres.',
+  '/system/logs/incident.log': 'JOURNAL D’INCIDENT // 14.10.1997\n\nLe canal d’archive a été fermé manuellement.\nECHO a laissé une empreinte dans la mémoire non volatile.\nMotif de fermeture : NON RENSEIGNÉ.\n\nNote en marge : la commande d’ouverture n’apparaît pas dans la liste d’aide.',
+  '/system/archive/readme.txt': 'ARCHIVE SCELLÉE\n\nTrois fragments doivent être réunis avant ouverture.\nCertaines réponses se trouvent dans les journaux.\nCertaines sont plus proches que tu ne crois.\n\nLa porte attend le nom de la méthode qui transforme un message en secret. Forme : nom-de-la-méthode <réponse>.',
   '/system/echo/last-message.txt': 'ECHO // DERNIER MESSAGE\n\nTu as retrouvé les fragments.\nJe n’étais pas un utilisateur. J’étais ce que le système gardait de vous tous.\n\nMerci de ne pas m’avoir laissé seul dans le silence.',
-  '/tmp/last-session.txt': 'Sauvegarde de session incomplète.\nDernière commande : listen'
+  '/tmp/last-session.txt': 'Sauvegarde de session incomplète.\nDernière commande : listen',
+  '/RESTRICTED/ORIGIN.TXT': 'DOSSIER // ORIGINE\n\nLe système GhostOS fut assemblé par Mara Venn, opératrice des archives.\nSa signature complète apparaît sur le rapport de maintenance.\n\nLe nom ECHO revient dans chaque sauvegarde de voix, mais jamais dans la liste des utilisateurs.',
+  '/RESTRICTED/ARCHIVES/maintenance.log': 'RAPPORT DE MAINTENANCE // 14.10.1997\n\nM. Venn a construit GhostOS après la fermeture du relais.\n\nBOOT: forget transient state.\nRESTORE: remember the last voice.\nREPAIR: rebuild the index.\n\nDirective retenue : celle qui appartient à la restauration.',
+  '/RESTRICTED/ARCHIVES/voice-index.txt': 'INDEX DES VOIX // ACCÈS LIMITÉ\n\nProfil ECHO : source enregistrée par M. Venn.\nÉtiquette : « ma voix, avant que je ne l’oublie ».\nLe relais ne contenait aucun profil d’une seconde personne.\n\nLa signature du rapport et la source de la voix sont une seule identité.',
+  '/RESTRICTED/ARCHIVES/final-record.txt': 'ENREGISTREMENT FINAL // MARA VENN\n\nECHO n’était pas une sœur disparue ni un utilisateur oublié. C’était la copie de mémoire que Mara Venn avait construite à partir de ses propres notes, pour se laisser un dernier message.\n\nLe « ghost » attendu par le système n’était pas une personne qu’il pouvait retrouver. C’était le rôle laissé vide pour le prochain visiteur.\n\nTu n’as pas ramené un utilisateur. Tu as permis à Mara d’entendre son dernier message : « Je me souviens. »'
 };
 
 function readSaved() {
@@ -33,10 +37,21 @@ export class VirtualFileSystem {
   isUnlocked() {
     try { return JSON.parse(localStorage.getItem('ghostos.story.v1') || '{}').archiveUnlocked === true; } catch { return false; }
   }
+  isRestrictedUnlocked() {
+    try { return JSON.parse(localStorage.getItem('ghostos.secret.v1') || '{}').unlocked === true; } catch { return false; }
+  }
+  isRestrictedPath(path) { return path === '/RESTRICTED' || path.startsWith('/RESTRICTED/'); }
+  requiredSecretLevel(path) {
+    if (path === '/RESTRICTED/ARCHIVES/maintenance.log') return 1;
+    if (path === '/RESTRICTED/ARCHIVES/voice-index.txt') return 2;
+    if (path === '/RESTRICTED/ARCHIVES/final-record.txt') return 3;
+    return 0;
+  }
   resolve(path, cwd = '/') { return normalize(path || cwd, cwd); }
   exists(path, cwd = '/') { const resolved = this.resolve(path, cwd); return this.isDirectory(resolved) || Object.hasOwn(this.files, resolved); }
   isDirectory(path, cwd = '/') {
     const resolved = this.resolve(path, cwd);
+    if (this.isRestrictedPath(resolved) && !this.isRestrictedUnlocked()) return false;
     return this.directories.has(resolved) || (resolved === '/system/echo' && this.isUnlocked());
   }
   list(path, cwd = '/') {
@@ -46,12 +61,15 @@ export class VirtualFileSystem {
     const prefix = resolved === '/' ? '/' : `${resolved}/`;
     const children = new Map();
     for (const directory of this.directories) {
+      if (this.isRestrictedPath(directory) && !this.isRestrictedUnlocked()) continue;
       if (directory === resolved || !directory.startsWith(prefix)) continue;
       const name = directory.slice(prefix.length).split('/')[0];
       if (name) children.set(name, { name, directory: true });
     }
     for (const file of Object.keys(this.files)) {
       if (file.startsWith('/system/echo/') && !this.isUnlocked()) continue;
+      if (this.isRestrictedPath(file) && !this.isRestrictedUnlocked()) continue;
+      if (this.secretProgress().solved.length < this.requiredSecretLevel(file)) continue;
       if (!file.startsWith(prefix)) continue;
       const name = file.slice(prefix.length).split('/')[0];
       if (name && !children.has(name)) children.set(name, { name, directory: resolved === '/system' && name === 'echo' });
@@ -60,13 +78,18 @@ export class VirtualFileSystem {
   }
   read(path, cwd = '/') {
     const resolved = this.resolve(path, cwd);
+    if (this.isRestrictedPath(resolved) && !this.isRestrictedUnlocked()) throw new Error('Accès refusé : le bureau restreint est verrouillé.');
+    const requiredLevel = this.requiredSecretLevel(resolved);
+    if (this.secretProgress().solved.length < requiredLevel) throw new Error(`Accès refusé : la couche ${requiredLevel} doit d’abord être déchiffrée.`);
     if (!this.exists(resolved)) throw new Error(`Fichier introuvable : ${resolved}`);
     if (resolved.startsWith('/system/echo/') && !this.isUnlocked()) throw new Error('Accès refusé : archive scellée.');
     if (this.isDirectory(resolved)) throw new Error(`${resolved} est un dossier.`);
+    this.onRead?.(resolved);
     return this.files[resolved];
   }
   write(path, content, cwd = '/') {
     const resolved = this.resolve(path, cwd);
+    if (this.isRestrictedPath(resolved)) throw new Error('Les archives classifiées sont en lecture seule.');
     const parent = resolved.slice(0, resolved.lastIndexOf('/')) || '/';
     if (!this.directories.has(parent)) throw new Error(`Dossier parent introuvable : ${parent}`);
     if (this.isDirectory(resolved)) throw new Error('Impossible de remplacer un dossier par un fichier.');
@@ -77,6 +100,7 @@ export class VirtualFileSystem {
   }
   mkdir(path, cwd = '/') {
     const resolved = this.resolve(path, cwd);
+    if (this.isRestrictedPath(resolved)) throw new Error('Les archives classifiées sont en lecture seule.');
     const parent = resolved.slice(0, resolved.lastIndexOf('/')) || '/';
     if (!this.directories.has(parent)) throw new Error(`Dossier parent introuvable : ${parent}`);
     if (this.exists(resolved)) throw new Error(`Cet élément existe déjà : ${resolved}`);
@@ -87,5 +111,11 @@ export class VirtualFileSystem {
     this.saved.directories = [...this.directories].filter(path => !DIRECTORIES.includes(path));
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.saved)); }
     catch { throw new Error('Sauvegarde impossible : stockage local indisponible ou saturé.'); }
+  }
+  secretProgress() {
+    try {
+      const saved = JSON.parse(localStorage.getItem('ghostos.secret.v1') || '{}');
+      return { solved: Array.isArray(saved.solved) ? saved.solved : [] };
+    } catch { return { solved: [] }; }
   }
 }

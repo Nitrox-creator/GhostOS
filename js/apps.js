@@ -9,24 +9,37 @@ const APP_LIST = [
   { id: 'tasks', name: 'Task Manager', glyph: '▥', width: 560, height: 390 },
   { id: 'puzzle', name: 'Puzzle Archive', glyph: '?', width: 560, height: 520 }
 ];
+const RESTRICTED_APPS = [
+  { id: 'restricted-terminal', name: 'Restricted Terminal', glyph: 'R>', width: 650, height: 410 },
+  { id: 'restricted-files', name: 'RESTRICTED', glyph: '▤', width: 570, height: 420 },
+  { id: 'restricted-archives', name: 'Classified Archives', glyph: '▣', width: 570, height: 420 },
+  { id: 'restricted-events', name: 'Event Log', glyph: '≋', width: 610, height: 440 },
+  { id: 'restricted-editor', name: 'Classified Record', hidden: true, width: 610, height: 460 }
+];
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
-export function getApps() { return APP_LIST; }
+export function getApps(secretMode = false) { return secretMode ? RESTRICTED_APPS : APP_LIST; }
 export function createApp(id, context) {
   switch (id) {
-    case 'terminal': return createTerminal({ ...context, close: () => context.manager.close('terminal') });
+    case 'terminal':
+    case 'restricted-terminal': return createTerminal({ ...context, close: () => context.manager.close(context.windowId) });
     case 'explorer': return explorerApp(context);
+    case 'restricted-files': return explorerApp({ ...context, secretMode: true });
     case 'editor': return editorApp(context);
+    case 'restricted-editor': return editorApp(context);
     case 'logs': return logsApp(context);
     case 'settings': return settingsApp(context);
     case 'tasks': return tasksApp(context);
     case 'puzzle': return puzzleApp(context);
+    case 'restricted-archives': return archivesApp(context);
+    case 'restricted-events': return eventsApp(context);
     default: return el('p', 'empty-state', 'Application introuvable.');
   }
 }
 
 function explorerApp(context) {
-  const root = el('div'); let cwd = '/home/ghost';
+  const root = el('div'); let cwd = context.secretMode ? '/RESTRICTED' : '/home/ghost';
   const toolbar = el('div', 'file-toolbar'); const up = el('button', 'tool-button', '↑ Parent'); const path = el('div', 'path-label'); const refresh = el('button', 'tool-button', '↻'); refresh.title = 'Actualiser'; refresh.setAttribute('aria-label', 'Actualiser'); const create = el('button', 'tool-button', '+ Fichier'); const list = el('div', 'file-list');
+  if (context.secretMode) create.hidden = true;
   toolbar.append(up, path, refresh, create); root.append(toolbar, list);
   const render = () => {
     path.textContent = cwd; list.replaceChildren();
@@ -38,7 +51,7 @@ function explorerApp(context) {
       }
       for (const item of entries) {
         const button = el('button', 'file-entry'); button.append(el('span', 'file-icon', item.directory ? '▸' : '·'), el('span', 'file-name', item.name), el('small', '', item.directory ? 'DOSSIER' : 'TEXTE'));
-        button.addEventListener('click', () => { const target = `${cwd === '/' ? '' : cwd}/${item.name}`; if (item.directory) { cwd = target; render(); } else context.openApp('editor', { path: target }); });
+        button.addEventListener('click', () => { const target = `${cwd === '/' ? '' : cwd}/${item.name}`; if (item.directory) { cwd = target; render(); } else context.openApp(context.secretMode ? 'restricted-editor' : 'editor', { path: target }); });
         list.append(button);
       }
       if (!entries.length) list.append(el('div', 'empty-state', 'Ce dossier est vide.'));
@@ -57,6 +70,7 @@ function explorerApp(context) {
 function editorApp(context) {
   const root = el('div', 'editor-app'); const toolbar = el('div', 'editor-toolbar'); const name = el('input', 'editor-name'); name.placeholder = 'nom-du-fichier.txt';
   const save = el('button', 'tool-button', 'Enregistrer'); const status = el('span', 'app-subtitle'); const body = el('textarea', 'editor-body'); body.spellcheck = false;
+  if (context.secretMode) { name.readOnly = true; body.readOnly = true; save.hidden = true; }
   if (context.payload?.path) { name.value = context.payload.path; try { body.value = context.fs.read(context.payload.path); } catch (error) { status.textContent = error.message; } }
   else name.value = '/home/ghost/documents/new-note.txt';
   toolbar.append(name, save, status); root.append(toolbar, body);
@@ -68,8 +82,11 @@ function logsApp(context) {
   const root = el('div'); root.append(el('h2', 'app-heading', 'Journaux système'), el('p', 'app-subtitle', 'Flux fictif de la machine locale'));
   const list = el('div', 'log-list'); const entries = [
     ['09:00:01', 'INFO', 'Noyau GhostOS 2.7 initialisé.'], ['09:00:03', 'WARN', 'Source temporelle distante introuvable.'], ['09:00:04', 'INFO', 'Session invitée créée.'],
-    ['09:00:08', 'USER', 'Dernier utilisateur connu : ECHO.'], ['09:01:12', 'WARN', 'Archive /system/echo verrouillée. Fragments : 0/3.'], ['09:04:44', 'INFO', 'Le silence n’est jamais vide.']
+    ['09:00:08', 'USER', 'Dernier utilisateur connu : ECHO.'], ['09:00:09', 'TRACE', 'Étiquette de restauration : décaler la date, puis retirer son préfixe.'], ['09:01:12', 'WARN', 'Archive /system/echo verrouillée. Fragments : 0/3.'], ['09:04:44', 'INFO', 'Le silence n’est jamais vide.']
   ];
+  if (context.secretStory.discover('boot-offset')) context.notify('Trace détectée', 'Une ligne du journal semble répondre à un indice déjà entendu.');
+  const clue = el('p', 'log-clue', 'Une commande de maintenance a été retirée de l’aide standard.');
+  root.append(clue);
   if (context.story.solved.length) entries.push(['09:05:02', 'TRACE', `Fragment de mémoire restauré (${context.story.solved.length}/3).`]);
   if (context.story.archiveUnlocked) entries.push(['09:05:33', 'ECHO', 'Tu as trouvé le chemin. Je savais que tu reviendrais.']);
   for (const [time, level, message] of entries) { const row = el('div', `log-entry${level === 'ECHO' ? ' secret' : ''}`); row.append(el('span', 'log-time', time), el('span', 'log-level', level), el('span', '', message)); list.append(row); }
@@ -92,9 +109,17 @@ function settingsApp(context) {
   const reset = el('button', 'tool-button', 'Réinitialiser GhostOS');
   reset.addEventListener('click', () => {
     if (!confirm('Effacer les fichiers, paramètres et la progression enregistrés dans ce navigateur ?')) return;
-    localStorage.removeItem('ghostos.files.v1'); localStorage.removeItem('ghostos.settings.v1'); localStorage.removeItem('ghostos.story.v1'); localStorage.removeItem('ghostos.session.v1'); location.reload();
+    localStorage.removeItem('ghostos.files.v1'); localStorage.removeItem('ghostos.settings.v1'); localStorage.removeItem('ghostos.story.v1'); localStorage.removeItem('ghostos.secret.v1'); localStorage.removeItem('ghostos.session.v1'); location.reload();
   });
-  root.append(group, reset); return root;
+  const resetSecret = el('button', 'tool-button secret-reset', 'Réinitialiser uniquement le mode secret');
+  resetSecret.addEventListener('click', () => {
+    if (!confirm('Effacer uniquement le déverrouillage, les énigmes et les indices du mode secret ?')) return;
+    context.secretStory.reset();
+    context.manager.list().filter(task => task.id.startsWith('restricted-')).forEach(task => context.manager.close(task.id));
+    context.leaveRestricted(false);
+    context.notify('Mode secret réinitialisé', 'Les fichiers, paramètres et fragments normaux sont conservés.');
+  });
+  root.append(group, reset, resetSecret); return root;
 }
 
 function tasksApp(context) {
@@ -140,4 +165,66 @@ function puzzleApp(context) {
     if (context.story.archiveUnlocked) root.append(el('p', 'puzzle-final terminal-line cyan', 'ARCHIVE OUVERTE // explore /system/echo dans File Explorer.'));
   };
   render(); return root;
+}
+
+function archivesApp(context) {
+  context.secretStory.recordEvent('archive-opened');
+  const root = el('div');
+  root.append(el('h2', 'app-heading', 'Archives classifiées'), el('p', 'app-subtitle', 'Les documents apparaissent au fil des couches déchiffrées. Actualise l’index après chaque découverte.'));
+  const list = el('div', 'file-list');
+  const refresh = el('button', 'tool-button', 'Actualiser');
+  const render = () => {
+    list.replaceChildren();
+    try {
+      const files = context.fs.list('/RESTRICTED/ARCHIVES');
+      for (const file of files) {
+        const button = el('button', 'file-entry');
+        button.append(el('span', 'file-icon', '▣'), el('span', 'file-name', file.name), el('small', '', 'CLASSIFIÉ'));
+        button.addEventListener('click', () => context.openApp('restricted-editor', { path: `/RESTRICTED/ARCHIVES/${file.name}` }));
+        list.append(button);
+      }
+    } catch (error) { list.append(el('div', 'empty-state', error.message)); }
+  };
+  refresh.addEventListener('click', render);
+  root.append(list, refresh); render(); return root;
+}
+
+const EVENT_LABELS = {
+  'door-opened': 'Le sas restreint a reconnu une signature.',
+  'desk-opened': 'Une session a rejoint le bureau interdit.',
+  'desk-exited': 'La session est revenue au bureau normal.',
+  'truth-recovered': 'Le dernier fragment de mémoire a été restauré.',
+  'archive-opened': 'Un index des archives a été consulté.',
+  'event-log-opened': 'Le journal d’événements a été ouvert.',
+  'riddle-1': 'Couche 01 déchiffrée : identité du mainteneur.',
+  'riddle-2': 'Couche 02 déchiffrée : directive de restauration.',
+  'riddle-3': 'Couche 03 déchiffrée : origine de la voix.',
+  'clue-fragment': 'Un fragment de signal a été consulté.',
+  'clue-boot-offset': 'Une anomalie de l’horloge a été repérée.',
+  'clue-cipher': 'Une note sur le protocole d’ouverture a été lue.',
+  'clue-incident-date': 'Le journal d’incident a été consulté.',
+  'clue-terminal-whisper': 'Une réponse discrète du terminal a été entendue.',
+  'clue-origin': 'Le dossier d’origine a été ouvert.',
+  'clue-directive': 'Le rapport de maintenance a été étudié.',
+  'clue-voice': 'L’index des voix a été lu.'
+};
+
+function eventsApp(context) {
+  context.secretStory.recordEvent('event-log-opened');
+  const root = el('div');
+  root.append(el('h2', 'app-heading', 'Journal d’événements'), el('p', 'app-subtitle', 'La mémoire du système évolue avec chaque découverte.'));
+  const list = el('div', 'log-list');
+  const refresh = el('button', 'tool-button', 'Actualiser');
+  const render = () => {
+    list.replaceChildren();
+    for (const event of [...context.secretStory.events].reverse()) {
+      const time = new Date(event.time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const row = el('div', 'log-entry secret');
+      row.append(el('span', 'log-time', time), el('span', 'log-level', event.type.toUpperCase()), el('span', '', EVENT_LABELS[event.type] || 'Une nouvelle trace a été enregistrée.'));
+      list.append(row);
+    }
+    if (!context.secretStory.events.length) list.append(el('div', 'empty-state', 'Aucun événement enregistré.'));
+  };
+  refresh.addEventListener('click', render);
+  root.append(list, refresh); render(); return root;
 }
